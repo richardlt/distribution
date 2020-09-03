@@ -12,11 +12,9 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/reference"
-	"github.com/docker/distribution/registry/proxy/scheduler"
 	"github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/cache/memory"
 	"github.com/docker/distribution/registry/storage/driver/filesystem"
-	"github.com/docker/distribution/registry/storage/driver/inmemory"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -175,13 +173,10 @@ func makeTestEnv(t *testing.T, name string) *testEnv {
 		blobs: localRepo.Blobs(ctx),
 	}
 
-	s := scheduler.New(ctx, inmemory.New(), "/scheduler-state.json")
-
 	proxyBlobStore := proxyBlobStore{
 		repositoryName: nameRef,
 		remoteStore:    truthBlobs,
 		localStore:     localBlobs,
-		scheduler:      s,
 		authChallenger: &mockChallenger{},
 	}
 

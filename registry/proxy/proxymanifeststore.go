@@ -5,9 +5,7 @@ import (
 	"time"
 
 	"github.com/docker/distribution"
-	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/reference"
-	"github.com/docker/distribution/registry/proxy/scheduler"
 	"github.com/opencontainers/go-digest"
 )
 
@@ -19,7 +17,6 @@ type proxyManifestStore struct {
 	localManifests  distribution.ManifestService
 	remoteManifests distribution.ManifestService
 	repositoryName  reference.Named
-	scheduler       *scheduler.TTLExpirationScheduler
 	authChallenger  authChallenger
 }
 
@@ -69,28 +66,15 @@ func (pms proxyManifestStore) Get(ctx context.Context, dgst digest.Digest, optio
 		if err != nil {
 			return nil, err
 		}
-
-		// Schedule the manifest blob for removal
-		repoBlob, err := reference.WithDigest(pms.repositoryName, dgst)
-		if err != nil {
-			dcontext.GetLogger(ctx).Errorf("Error creating reference: %s", err)
-			return nil, err
-		}
-
-		pms.scheduler.AddManifest(repoBlob, repositoryTTL)
-		// Ensure the manifest blob is cleaned up
-		//pms.scheduler.AddBlob(blobRef, repositoryTTL)
-
 	}
 
 	return manifest, err
 }
 
 func (pms proxyManifestStore) Put(ctx context.Context, manifest distribution.Manifest, options ...distribution.ManifestServiceOption) (digest.Digest, error) {
-	var d digest.Digest
-	return d, distribution.ErrUnsupported
+	return pms.localManifests.Put(ctx, manifest, options...)
 }
 
 func (pms proxyManifestStore) Delete(ctx context.Context, dgst digest.Digest) error {
-	return distribution.ErrUnsupported
+	return pms.localManifests.Delete(ctx, dgst)
 }

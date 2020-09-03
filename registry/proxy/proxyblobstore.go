@@ -10,14 +10,12 @@ import (
 	"github.com/docker/distribution"
 	dcontext "github.com/docker/distribution/context"
 	"github.com/docker/distribution/reference"
-	"github.com/docker/distribution/registry/proxy/scheduler"
 	"github.com/opencontainers/go-digest"
 )
 
 type proxyBlobStore struct {
 	localStore     distribution.BlobStore
 	remoteStore    distribution.BlobService
-	scheduler      *scheduler.TTLExpirationScheduler
 	repositoryName reference.Named
 	authChallenger authChallenger
 }
@@ -134,14 +132,6 @@ func (pbs *proxyBlobStore) ServeBlob(ctx context.Context, w http.ResponseWriter,
 		if err := pbs.storeLocal(ctx, dgst); err != nil {
 			dcontext.GetLogger(ctx).Errorf("Error committing to storage: %s", err.Error())
 		}
-
-		blobRef, err := reference.WithDigest(pbs.repositoryName, dgst)
-		if err != nil {
-			dcontext.GetLogger(ctx).Errorf("Error creating reference: %s", err)
-			return
-		}
-
-		pbs.scheduler.AddBlob(blobRef, repositoryTTL)
 	}(dgst)
 
 	_, err = pbs.copyContent(ctx, dgst, w)
@@ -192,25 +182,21 @@ func (pbs *proxyBlobStore) Get(ctx context.Context, dgst digest.Digest) ([]byte,
 
 // Unsupported functions
 func (pbs *proxyBlobStore) Put(ctx context.Context, mediaType string, p []byte) (distribution.Descriptor, error) {
-	return distribution.Descriptor{}, distribution.ErrUnsupported
+	return pbs.localStore.Put(ctx, mediaType, p)
 }
 
 func (pbs *proxyBlobStore) Create(ctx context.Context, options ...distribution.BlobCreateOption) (distribution.BlobWriter, error) {
-	return nil, distribution.ErrUnsupported
+	return pbs.localStore.Create(ctx, options...)
 }
 
 func (pbs *proxyBlobStore) Resume(ctx context.Context, id string) (distribution.BlobWriter, error) {
-	return nil, distribution.ErrUnsupported
-}
-
-func (pbs *proxyBlobStore) Mount(ctx context.Context, sourceRepo reference.Named, dgst digest.Digest) (distribution.Descriptor, error) {
-	return distribution.Descriptor{}, distribution.ErrUnsupported
+	return pbs.localStore.Resume(ctx, id)
 }
 
 func (pbs *proxyBlobStore) Open(ctx context.Context, dgst digest.Digest) (distribution.ReadSeekCloser, error) {
-	return nil, distribution.ErrUnsupported
+	return pbs.localStore.Open(ctx, dgst)
 }
 
 func (pbs *proxyBlobStore) Delete(ctx context.Context, dgst digest.Digest) error {
-	return distribution.ErrUnsupported
+	return pbs.localStore.Delete(ctx, dgst)
 }

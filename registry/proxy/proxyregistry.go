@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -15,7 +14,6 @@ import (
 	"github.com/docker/distribution/registry/client/auth"
 	"github.com/docker/distribution/registry/client/auth/challenge"
 	"github.com/docker/distribution/registry/client/transport"
-	"github.com/docker/distribution/registry/proxy/scheduler"
 	"github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/driver"
 )
@@ -23,7 +21,6 @@ import (
 // proxyingRegistry fetches content from a remote registry and caches it locally
 type proxyingRegistry struct {
 	embedded       distribution.Namespace // provides local registry functionality
-	scheduler      *scheduler.TTLExpirationScheduler
 	remoteURL      url.URL
 	authChallenger authChallenger
 }
@@ -35,64 +32,6 @@ func NewRegistryPullThroughCache(ctx context.Context, registry distribution.Name
 		return nil, err
 	}
 
-	v := storage.NewVacuum(ctx, driver)
-	s := scheduler.New(ctx, driver, "/scheduler-state.json")
-	s.OnBlobExpire(func(ref reference.Reference) error {
-		var r reference.Canonical
-		var ok bool
-		if r, ok = ref.(reference.Canonical); !ok {
-			return fmt.Errorf("unexpected reference type : %T", ref)
-		}
-
-		repo, err := registry.Repository(ctx, r)
-		if err != nil {
-			return err
-		}
-
-		blobs := repo.Blobs(ctx)
-
-		// Clear the repository reference and descriptor caches
-		err = blobs.Delete(ctx, r.Digest())
-		if err != nil {
-			return err
-		}
-
-		err = v.RemoveBlob(r.Digest().String())
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	s.OnManifestExpire(func(ref reference.Reference) error {
-		var r reference.Canonical
-		var ok bool
-		if r, ok = ref.(reference.Canonical); !ok {
-			return fmt.Errorf("unexpected reference type : %T", ref)
-		}
-
-		repo, err := registry.Repository(ctx, r)
-		if err != nil {
-			return err
-		}
-
-		manifests, err := repo.Manifests(ctx)
-		if err != nil {
-			return err
-		}
-		err = manifests.Delete(ctx, r.Digest())
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-
-	err = s.Start()
-	if err != nil {
-		return nil, err
-	}
-
 	cs, err := configureAuth(config.Username, config.Password, config.RemoteURL)
 	if err != nil {
 		return nil, err
@@ -100,7 +39,6 @@ func NewRegistryPullThroughCache(ctx context.Context, registry distribution.Name
 
 	return &proxyingRegistry{
 		embedded:  registry,
-		scheduler: s,
 		remoteURL: *remoteURL,
 		authChallenger: &remoteAuthChallenger{
 			remoteURL: *remoteURL,
@@ -160,7 +98,6 @@ func (pr *proxyingRegistry) Repository(ctx context.Context, name reference.Named
 		blobStore: &proxyBlobStore{
 			localStore:     localRepo.Blobs(ctx),
 			remoteStore:    remoteRepo.Blobs(ctx),
-			scheduler:      pr.scheduler,
 			repositoryName: name,
 			authChallenger: pr.authChallenger,
 		},
@@ -169,7 +106,6 @@ func (pr *proxyingRegistry) Repository(ctx context.Context, name reference.Named
 			localManifests:  localManifests, // Options?
 			remoteManifests: remoteManifests,
 			ctx:             ctx,
-			scheduler:       pr.scheduler,
 			authChallenger:  pr.authChallenger,
 		},
 		name: name,

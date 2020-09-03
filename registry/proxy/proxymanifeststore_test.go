@@ -12,7 +12,6 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/client/auth"
 	"github.com/docker/distribution/registry/client/auth/challenge"
-	"github.com/docker/distribution/registry/proxy/scheduler"
 	"github.com/docker/distribution/registry/storage"
 	"github.com/docker/distribution/registry/storage/cache/memory"
 	"github.com/docker/distribution/registry/storage/driver/inmemory"
@@ -136,14 +135,12 @@ func newManifestStoreTestEnv(t *testing.T, name, tag string) *manifestStoreTestE
 		stats:     make(map[string]int),
 	}
 
-	s := scheduler.New(ctx, inmemory.New(), "/scheduler-state.json")
 	return &manifestStoreTestEnv{
 		manifestDigest: manifestDigest,
 		manifests: proxyManifestStore{
 			ctx:             ctx,
 			localManifests:  localManifests,
 			remoteManifests: truthManifests,
-			scheduler:       s,
 			repositoryName:  nameRef,
 			authChallenger:  &mockChallenger{},
 		},
